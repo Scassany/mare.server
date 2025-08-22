@@ -1,4 +1,4 @@
-﻿namespace MareSynchronosAuthService.Authentication;
+﻿namespace MareSynchronosServer.Authentication;
 
 internal record SecretKeyFailedAuthorization
 {

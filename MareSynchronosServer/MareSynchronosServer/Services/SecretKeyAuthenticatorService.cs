@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using MareSynchronosAuthService.Authentication;
+using MareSynchronosServer.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;

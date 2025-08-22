@@ -29,14 +29,14 @@
         "ShardName": "Services",
         "MetricsPort": 6150,
         "CdnFullUrl": "http://localhost:6200/",
-        "MainServerAddress": "http://mare-server:6000/",
+        "MainServerAddress": "http://mare-server:6300/",
         "MainServerGrpcAddress": "http://mare-server:6005/",
         "DiscordBotToken": "",
         "DiscordChannelForMessages": "",
         "DiscordChannelForCommands": "",
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
         "RedisConnectionString": "redis,password=secretredispassword",
-        "VanityRoles": {"984484868241096724":"Main Developer", "1012008556259725398":"Patreon Subscriber"}
+        "VanityRoles": {"1097028541666836500":"Main Developer", "1012008556259725398":"Patreon Subscriber"}
     },
     "AllowedHosts": "*",
     "Kestrel": {

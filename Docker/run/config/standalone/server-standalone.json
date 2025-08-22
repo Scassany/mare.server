@@ -8,7 +8,7 @@
             "Microsoft": "Warning",
             "Microsoft.Hosting.Lifetime": "Information",
             "Microsoft.EntityFramework": "Warning",
-            "MareSynchronosServer": "Debug",
+            "MareSynchronosServer": "Trace",
             "MareSynchronosShared": "Debug",
             "System.IO": "Information",
             "MareSynchronosServer.Services.SystemInfoService": "Warning"
@@ -29,7 +29,7 @@
     "MareSynchronos": {
         "DbContextPoolSize": 512,
         "ShardName": "Main",
-        "MetricsPort": 6050,
+        "MetricsPort": 6350,
         "MainServerAddress": "",
         "FailedAuthForTempBan": 5,
         "TempBanDurationInMinutes": 5,
@@ -38,20 +38,20 @@
             ""
         ],
         "RedisConnectionString": "redis,password=secretredispassword",
-        "CdnFullUrl": "http://localhost:6200",
+        "CdnFullUrl": "http://localhost:6200/marecache",
         "MaxExistingGroupsByUser": 6,
         "MaxJoinedGroupsByUser": 10,
         "MaxGroupUserCount": 100,
         "PurgeUnusedAccounts": false,
         "PurgeUnusedAccountsPeriodInDays": 14,
-        "ExpectedClientVersion": "0.9.0",
+        "ExpectedClientVersion": "0.11.22",
         "XIVAPIKey": ""
     },
     "AllowedHosts": "*",
     "Kestrel": {
         "Endpoints": {
             "Http": {
-                "Url": "http://+:6000"
+                "Url": "http://+:6300"
             }
         }
     },

@@ -117,8 +117,8 @@ internal class DiscordBot : IHostedService
         _botServices.UpdateGuild(guild);
         await _botServices.LogToChannel("Bot startup complete.").ConfigureAwait(false);
         _ = UpdateVanityRoles(guild, _clientConnectedCts.Token);
-        _ = RemoveUsersNotInVanityRole(_clientConnectedCts.Token);
-        _ = RemoveUnregisteredUsers(_clientConnectedCts.Token);
+        // _ = RemoveUsersNotInVanityRole(_clientConnectedCts.Token);
+        // 1_ = RemoveUnregisteredUsers(_clientConnectedCts.Token);
     }
 
     private async Task UpdateVanityRoles(RestGuild guild, CancellationToken token)

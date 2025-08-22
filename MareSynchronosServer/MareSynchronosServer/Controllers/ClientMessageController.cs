@@ -20,6 +20,8 @@ public class ClientMessageController : Controller
         _hubContext = hubContext;
     }
 
+
+    
     [Route("sendMessage")]
     [HttpPost]
     public async Task<IActionResult> SendMessage(ClientMessage msg)

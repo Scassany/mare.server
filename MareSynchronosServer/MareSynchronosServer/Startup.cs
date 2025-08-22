@@ -18,6 +18,8 @@ using StackExchange.Redis.Extensions.Core.Configuration;
 using System.Net;
 using StackExchange.Redis.Extensions.System.Text.Json;
 using MareSynchronos.API.SignalR;
+using MareSynchronosAuthService.Controllers;
+using MareSynchronosAuthService.Services;
 using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -44,9 +46,17 @@ public class Startup
         services.AddHttpContextAccessor();
 
         services.AddTransient(_ => Configuration);
-
+        services.AddSingleton<IConfigurationService<AuthServiceConfiguration>, MareConfigurationServiceServer<AuthServiceConfiguration>>();
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
-
+        ConfigureRedis(services, mareConfig);
+        
+        services.AddSingleton<SecretKeyAuthenticatorService>();
+        // services.AddSingleton<GeoIPService>();
+        // services.AddHostedService(provider => provider.GetRequiredService<GeoIPService>());
+        services.AddSingleton<ServerTokenGenerator>();
+        
+        services.Configure<AuthServiceConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        
         // configure metrics
         ConfigureMetrics(services);
 
@@ -71,7 +81,8 @@ public class Startup
             a.FeatureProviders.Remove(a.FeatureProviders.OfType<ControllerFeatureProvider>().First());
             if (mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerAddress), defaultValue: null) == null)
             {
-                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareServerConfigurationController), typeof(MareBaseConfigurationController), typeof(ClientMessageController)));
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareServerConfigurationController), typeof(MareBaseConfigurationController), typeof(ClientMessageController), typeof(JwtController), typeof(OAuthController)));
+                
             }
             else
             {
@@ -80,18 +91,68 @@ public class Startup
         });
     }
 
+    private void ConfigureRedis(IServiceCollection services, IConfigurationSection mareConfig)
+    {
+        // configure redis for SignalR
+        var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
+        var options = ConfigurationOptions.Parse(redisConnection);
+
+        var endpoint = options.EndPoints[0];
+        string address = "";
+        int port = 0;
+        
+        if (endpoint is DnsEndPoint dnsEndPoint) { address = dnsEndPoint.Host; port = dnsEndPoint.Port; }
+        if (endpoint is IPEndPoint ipEndPoint) { address = ipEndPoint.Address.ToString(); port = ipEndPoint.Port; }
+        /*
+        var redisConfiguration = new RedisConfiguration()
+        {
+            AbortOnConnectFail = true,
+            KeyPrefix = "",
+            Hosts = new RedisHost[]
+            {
+                new RedisHost(){ Host = address, Port = port },
+            },
+            AllowAdmin = true,
+            ConnectTimeout = options.ConnectTimeout,
+            Database = 0,
+            Ssl = false,
+            Password = options.Password,
+            ServerEnumerationStrategy = new ServerEnumerationStrategy()
+            {
+                Mode = ServerEnumerationStrategy.ModeOptions.All,
+                TargetRole = ServerEnumerationStrategy.TargetRoleOptions.Any,
+                UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw,
+            },
+            MaxValueLength = 1024,
+            PoolSize = mareConfig.GetValue(nameof(ServerConfiguration.RedisPool), 50),
+            SyncTimeout = options.SyncTimeout,
+        };*/
+
+        var muxer = ConnectionMultiplexer.Connect(options);
+        var db = muxer.GetDatabase();
+        services.AddSingleton<IDatabase>(db);
+
+        _logger.LogInformation("Setting up Redis to connect to {host}:{port}", address, port);
+    }
+    
     private void ConfigureMareServices(IServiceCollection services, IConfigurationSection mareConfig)
     {
         bool isMainServer = mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerAddress), defaultValue: null) == null;
 
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationBase>(Configuration.GetRequiredSection("MareSynchronos"));
-
+        
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<OnlineSyncedPairCacheService>();
+        
+        services.Configure<AuthServiceConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
+
+        services.AddHttpLogging(o => { });
         // configure services based on main server status
+        _logger.LogWarning($"IsMainServer = {isMainServer}");
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 
         services.AddSingleton(s => new MareCensus(s.GetRequiredService<ILogger<MareCensus>>()));
@@ -193,6 +254,8 @@ public class Startup
 
     private static void ConfigureAuthorization(IServiceCollection services)
     {
+        services.AddTransient<IAuthorizationHandler, RedisDbUserRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, ExistingUserRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenHubRequirementHandler>();
@@ -210,6 +273,8 @@ public class Startup
                 };
             });
 
+        services.AddLogging();
+
         services.AddAuthentication(o =>
         {
             o.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -222,6 +287,13 @@ public class Startup
             options.DefaultPolicy = new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser().Build();
+            options.AddPolicy("OAuthToken", policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.AddRequirements(new ValidTokenRequirement());
+                policy.AddRequirements(new ExistingUserRequirement());
+                policy.RequireClaim(MareClaimTypes.OAuthLoginToken, "True");
+            });
             options.AddPolicy("Authenticated", policy =>
             {
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
@@ -253,6 +325,8 @@ public class Startup
     {
         services.AddDbContextPool<MareDbContext>(options =>
         {
+            var defaultConnection = Configuration.GetConnectionString("DefaultConnection");
+            _logger.LogDebug("Connecting to DB using: '{0}'", defaultConnection);
             options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
             {
                 builder.MigrationsHistoryTable("_efmigrationshistory", "public");
@@ -337,13 +411,17 @@ public class Startup
 
         app.UseWebSockets();
         app.UseHttpMetrics();
+        app.UseExceptionHandler("/Error");
 
         var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4980));
         metricServer.Start();
 
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseHttpLogging();
 
+        
+        
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapHub<MareHub>(IMareHub.Path, options =>
@@ -355,11 +433,12 @@ public class Startup
 
             endpoints.MapHealthChecks("/health").AllowAnonymous();
             endpoints.MapControllers();
+            
 
             foreach (var source in endpoints.DataSources.SelectMany(e => e.Endpoints).Cast<RouteEndpoint>())
             {
                 if (source == null) continue;
-                _logger.LogInformation("Endpoint: {url} ", source.RoutePattern.RawText);
+                _logger.LogWarning("Endpoint: {url} ", source.RoutePattern.RawText);
             }
         });
 
