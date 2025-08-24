@@ -1,6 +1,10 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 as BUILD
+FROM mcr.microsoft.com/dotnet/sdk:9.0 as BUILD
 
-RUN git clone --recurse-submodules https://github.com/Penumbra-Sync/server
+RUN git clone --recurse-submodules https://github.com/caraxi/mare.server
+
+COPY MareAPI /server/MareAPI
+COPY MareSynchronosServer/MareSynchronosShared /server/MareSynchronosServer/MareSynchronosShared
+COPY MareSynchronosServer/MareSynchronosAuthService /server/MareSynchronosServer/MareSynchronosAuthService
 
 WORKDIR /server/MareSynchronosServer/MareSynchronosAuthService/
 
@@ -10,7 +14,7 @@ RUN dotnet publish \
         --output=/MareSynchronosAuthService \
         MareSynchronosAuthService.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
 RUN adduser \
         --disabled-password \
