@@ -1,6 +1,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 as BUILD
 
-RUN git clone --recurse-submodules https://github.com/Penumbra-Sync/server
+RUN git clone --recurse-submodules https://github.com/caraxi/mare.server
+
+COPY MareAPI /server/MareAPI
+COPY MareSynchronosServer/MareSynchronosShared /server/MareSynchronosServer/MareSynchronosShared
+COPY MareSynchronosServer/MareSynchronosServer /server/MareSynchronosServer/MareSynchronosServer
 
 WORKDIR /server/MareSynchronosServer/MareSynchronosServer/
 
